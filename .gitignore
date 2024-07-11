@@ -1,0 +1,9 @@
+*
+
+!HelloWorldApp.sln
+!HelloWorldApp
+!*.csproj
+!*.cs
+!*.yaml
+!.gitignore
+!README.md
