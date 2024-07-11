@@ -1,0 +1,65 @@
+trigger:
+- master
+
+pool:
+  vmImage: ubuntu-latest
+  name: default
+
+
+variables:
+  majorVersion: '1'
+  minorVersion: '0'
+  artifactVersion: ''
+  sourceBranch: 'master'
+
+steps:
+# checkout git repo
+- checkout: self
+  clean: true
+
+# Prepare sonarqube connection
+- task: SonarQubePrepare@5
+  inputs:
+    SonarQube: 'azure_devops_pipeline_connection_master'
+    scannerMode: 'MSBuild'
+    projectKey: '<project_key>'
+
+# Dotnet build task
+- script: dotnet build
+  displayName: 'build the artifact'
+
+# Run Code Analysis task
+- task: SonarQubeAnalyze@5
+  inputs:
+    jdkversion: 'JAVA_HOME'
+
+# Publish Quality Gate Result task
+- task: SonarQubePublish@5
+  inputs:
+    pollingTimeoutSec: '300'
+
+# set new_version for artifacts as a variable 
+- script: |
+    new_version="$(majorVersion).$(minorVersion).$(Build.Buildid)"
+    echo "##vso[task.setvariable variable=artifactVersion;]$new_version"
+  displayName: 'Set Version'
+
+# echo the variable
+- script: echo "Version number is $(artifactVersion)"
+  displayName: 'Display Version Number'
+
+# package nugat artifact
+- script: dotnet pack -p Version=$(artifactVersion)
+  displayName: 'Create NuGet Package'
+
+# tag the build
+- task: artifactstagger@1
+  inputs:
+    EndpointType: 'integrated'
+    StageNameTag: false
+    CustomTags: '$(sourceBranch)_$(artifactVersion)'
+  displayName: 'Tag Buildid'
+  
+# publish artifact
+- script: dotnet nuget push --source "artifacts" --api-key az $(System.DefaultWorkingDirectory)/HelloWorldApp/bin/Release/HelloWorldApp.$(artifactVersion).nupkg
+  displayName: 'Publish NuGet Package'
